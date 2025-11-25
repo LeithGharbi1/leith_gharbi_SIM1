@@ -5,15 +5,56 @@ pipeline {
         githubPush()
     }
 
+    environment {
+        DOCKERHUB_USER = 'leithgh'            // 👉 change to your Docker Hub username
+        IMAGE_NAME = 'student-test'    // 👉 change if needed
+    }
+
     stages {
-        stage('git ') {
+
+        stage('Git Checkout') {
             steps {
-                git branch: 'master', url :'https://github.com/LeithGharbi1/leith_gharbi_SIM1'
+                git branch: 'master', url: 'https://github.com/LeithGharbi1/leith_gharbi_SIM1'
             }
         }
-        stage('compilation') {
+
+        stage('Maven Compile') {
             steps {
-                sh 'mvn clean compile'
+                sh 'mvn compile'
+            }
+        }
+
+        
+
+        stage('Maven Package') {
+            steps {
+                sh 'mvn clean package -DskipTests'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh """
+                    docker build -t ${DOCKERHUB_USER}/${IMAGE_NAME}:latest .
+                """
+            }
+        }
+
+        stage('Docker Login') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
+                                                 usernameVariable: 'USER',
+                                                 passwordVariable: 'PASS')]) {
+                    sh """
+                        echo "$PASS" | docker login -u "$USER" --password-stdin
+                    """
+                }
+            }
+        }
+
+        stage('Docker Push') {
+            steps {
+                sh "docker push ${DOCKERHUB_USER}/${IMAGE_NAME}:latest"
             }
         }
     }
