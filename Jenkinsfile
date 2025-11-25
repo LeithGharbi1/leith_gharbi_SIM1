@@ -14,7 +14,7 @@ pipeline {
 
         stage('Git Checkout') {
             steps {
-                git branch: 'master', url: 'https://github.com/LeithGharbi1/leith_gharbi_SIM1'
+                git branch: 'main', url: 'https://github.com/LeithGharbi1/leith_gharbi_SIM1'
             }
         }
 
