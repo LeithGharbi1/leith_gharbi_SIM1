@@ -32,13 +32,16 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
-            steps {
-                sh """
-                    docker build -t ${DOCKERHUB_USER}/${IMAGE_NAME}:latest .
-                """
-            }
+       stage('Build Docker Image') {
+    steps {
+        dir("${WORKSPACE}") {   
+            sh """
+                docker build -t ${DOCKERHUB_USER}/${IMAGE_NAME}:latest .
+            """
         }
+    }
+}
+
 
         stage('Docker Login') {
             steps {
