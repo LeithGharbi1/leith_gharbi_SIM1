@@ -32,6 +32,19 @@ pipeline {
             }
         }
 
+  stage('MVN SonarQube') {
+            steps {
+                withSonarQubeEnv('sonarqube') {
+                    sh """
+                        mvn sonar:sonar \
+                        -Dsonar.projectKey=student-test \
+                        -Dsonar.host.url=http://localhost:9000 \
+                        -Dsonar.login=admin
+                    """
+                }
+            }
+        }
+        
        stage('Build Docker Image') {
     steps {
         dir("${WORKSPACE}") {   
