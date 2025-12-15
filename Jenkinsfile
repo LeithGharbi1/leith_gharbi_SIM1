@@ -2,14 +2,14 @@ pipeline {
     agent any
 
     triggers {
-        githubPush()
+        githubPush()  // Trigger pipeline on GitHub push
     }
 
     environment {
-        DOCKERHUB_USER = 'leithgh'           
-        IMAGE_NAME = 'student-test' 
+        DOCKERHUB_USER = 'leithgh'
+        IMAGE_NAME = 'student-test'
         K8S_NAMESPACE = 'devops'
-        K8S_MANIFEST_DIR = 'k8s'             
+        K8S_MANIFEST_DIR = 'k8s'            
         MYSQL_DEPLOYMENT_NAME = 'mysql-deployment'
         SPRING_DEPLOYMENT_NAME = 'spring-deployment'
         KUBECONFIG_CREDENTIAL_ID = 'kubeconfig'
@@ -17,46 +17,24 @@ pipeline {
 
     stages {
 
+        // 1️⃣ Git Checkout
         stage('Git Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/LeithGharbi1/leith_gharbi_SIM1'
+                git branch: 'master', url: 'https://github.com/LeithGharbi1/leith_gharbi_SIM1'
             }
         }
 
-       stage('Build') {
+        // 2️⃣ Build (Maven compile + package)
+        stage('Build') {
             steps {
                 sh 'mvn clean package -DskipTests'
             }
         }
 
-
- // stage('MVN SonarQube') {
-           // steps {
-              //  withSonarQubeEnv('sonarqube') {
-                  //  sh """
-                      //  mvn sonar:sonar \
-                      //  -Dsonar.projectKey=student-test \
-                       // -Dsonar.host.url=http://192.168.33.10:9000 \
-                     //   -Dsonar.login=admin
-               //     """
-               // }
-           // }
-      //  }
-        
-       stage('Build Docker Image') {
-    steps {
-        dir("${WORKSPACE}") {   
-            sh """
-                docker build -t ${DOCKERHUB_USER}/${IMAGE_NAME}:latest .
-            """
-        }
-    }
-}
-
-
- stage('Docker Build & Push') {
+        // 3️⃣ Docker Build & Push
+        stage('Docker Build & Push') {
             steps {
-                // Build Docker image
+                // Build image
                 sh "docker build -t ${DOCKERHUB_USER}/${IMAGE_NAME}:latest ."
 
                 // Login to Docker Hub
@@ -69,29 +47,35 @@ pipeline {
                 // Push image
                 sh "docker push ${DOCKERHUB_USER}/${IMAGE_NAME}:latest"
             }
- }
+        }
+
+        // 4️⃣ Kubernetes Deploy (apply manifests)
         stage('Kubernetes Deploy') {
             steps {
-                // Apply MySQL first
-                sh "kubectl apply -f mysql-deployment.yaml -n ${K8S_NAMESPACE}"
-
-                // Apply Spring Boot
-                sh "kubectl apply -f spring-deployment.yaml -n ${K8S_NAMESPACE}"
+                withCredentials([file(credentialsId: "${KUBECONFIG_CREDENTIAL_ID}", variable: 'KUBECONFIG')]) {
+                    sh """
+                        kubectl apply -f ${K8S_MANIFEST_DIR}/mysql-deployment.yaml -n ${K8S_NAMESPACE}
+                        kubectl apply -f ${K8S_MANIFEST_DIR}/spring-deployment.yaml -n ${K8S_NAMESPACE}
+                    """
+                }
             }
         }
 
+        // 5️⃣ Deploy MySQL & Spring Boot on K8s (verify rollout)
         stage('Deploy MySQL & Spring Boot on K8s') {
             steps {
-                echo "Verifying Pods and Services..."
+                withCredentials([file(credentialsId: "${KUBECONFIG_CREDENTIAL_ID}", variable: 'KUBECONFIG')]) {
+                    sh """
+                        echo 'Waiting for MySQL rollout...'
+                        kubectl -n ${K8S_NAMESPACE} rollout status deployment/${MYSQL_DEPLOYMENT_NAME} --timeout=180s
+                        echo 'Waiting for Spring Boot rollout...'
+                        kubectl -n ${K8S_NAMESPACE} rollout status deployment/${SPRING_DEPLOYMENT_NAME} --timeout=180s
 
-                sh "kubectl get pods -n ${K8S_NAMESPACE}"
-                sh "kubectl get svc -n ${K8S_NAMESPACE}"
-
-                // Optional: tail logs of Spring Boot Pod
-                sh """
-                SPRING_POD=\$(kubectl get pods -n ${K8S_NAMESPACE} -l app=spring-app -o jsonpath='{.items[0].metadata.name}')
-                kubectl logs \$SPRING_POD -n ${K8S_NAMESPACE} --tail=50
-                """
+                        echo 'Checking Pods and Services'
+                        kubectl -n ${K8S_NAMESPACE} get pods -o wide
+                        kubectl -n ${K8S_NAMESPACE} get svc
+                    """
+                }
             }
         }
 
@@ -107,12 +91,5 @@ pipeline {
         failure {
             echo 'Pipeline failed!'
         }
-
-
-
-
-
-
-        
     }
 }
