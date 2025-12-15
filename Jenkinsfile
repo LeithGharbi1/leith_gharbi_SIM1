@@ -2,17 +2,17 @@ pipeline {
     agent any
 
     triggers {
-        githubPush()  // Trigger pipeline on GitHub push
+        githubPush()
     }
 
     environment {
         DOCKERHUB_USER = 'leithgh'
         IMAGE_NAME = 'student-test'
         K8S_NAMESPACE = 'devops'
-        K8S_MANIFEST_DIR = "${WORKSPACE}/k8s"   // full path in workspace
+        K8S_MANIFEST_DIR = '/var/lib/jenkins/workspace/Leith Gharbi 4 SIM1/k8s'
         MYSQL_DEPLOYMENT_NAME = 'mysql-deployment'
         SPRING_DEPLOYMENT_NAME = 'spring-deployment'
-        KUBECONFIG_PATH = '/var/lib/jenkins/kubeconfig'  // local kubeconfig
+        KUBECONFIG_PATH = '/var/lib/jenkins/kubeconfig'
     }
 
     stages {
@@ -46,11 +46,25 @@ pipeline {
         stage('Kubernetes Deploy') {
             steps {
                 sh """
-                    KUBECONFIG=${KUBECONFIG_PATH} kubectl apply -f ${K8S_MANIFEST_DIR}/ -n ${K8S_NAMESPACE}
-                    KUBECONFIG=${KUBECONFIG_PATH} kubectl rollout status deployment/${MYSQL_DEPLOYMENT_NAME} -n ${K8S_NAMESPACE} --timeout=180s
-                    KUBECONFIG=${KUBECONFIG_PATH} kubectl rollout status deployment/${SPRING_DEPLOYMENT_NAME} -n ${K8S_NAMESPACE} --timeout=180s
-                    KUBECONFIG=${KUBECONFIG_PATH} kubectl get pods -n ${K8S_NAMESPACE} -o wide
-                    KUBECONFIG=${KUBECONFIG_PATH} kubectl get svc -n ${K8S_NAMESPACE}
+                    export KUBECONFIG=${KUBECONFIG_PATH}
+                    kubectl apply -f "${K8S_MANIFEST_DIR}/mysql-deployment.yaml" -n ${K8S_NAMESPACE}
+                    kubectl apply -f "${K8S_MANIFEST_DIR}/spring-deployment.yaml" -n ${K8S_NAMESPACE}
+                """
+            }
+        }
+
+        stage('Verify Rollout') {
+            steps {
+                sh """
+                    export KUBECONFIG=${KUBECONFIG_PATH}
+                    echo 'Waiting for MySQL rollout...'
+                    kubectl -n ${K8S_NAMESPACE} rollout status deployment/${MYSQL_DEPLOYMENT_NAME} --timeout=180s
+                    echo 'Waiting for Spring Boot rollout...'
+                    kubectl -n ${K8S_NAMESPACE} rollout status deployment/${SPRING_DEPLOYMENT_NAME} --timeout=180s
+
+                    echo 'Pods and Services:'
+                    kubectl -n ${K8S_NAMESPACE} get pods -o wide
+                    kubectl -n ${K8S_NAMESPACE} get svc
                 """
             }
         }
@@ -58,14 +72,8 @@ pipeline {
     }
 
     post {
-        always {
-            echo 'Pipeline finished'
-        }
-        success {
-            echo 'Pipeline succeeded!'
-        }
-        failure {
-            echo 'Pipeline failed!'
-        }
+        always { echo 'Pipeline finished' }
+        success { echo 'Pipeline succeeded!' }
+        failure { echo 'Pipeline failed!' }
     }
 }
