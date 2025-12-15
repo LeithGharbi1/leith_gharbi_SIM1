@@ -9,29 +9,26 @@ pipeline {
         DOCKERHUB_USER = 'leithgh'
         IMAGE_NAME = 'student-test'
         K8S_NAMESPACE = 'devops'
-        K8S_MANIFEST_DIR = 'k8s'            
+        K8S_MANIFEST_DIR = "${WORKSPACE}/k8s"   // full path in workspace
         MYSQL_DEPLOYMENT_NAME = 'mysql-deployment'
         SPRING_DEPLOYMENT_NAME = 'spring-deployment'
-        KUBECONFIG_PATH = '/var/lib/jenkins/kubeconfig'
+        KUBECONFIG_PATH = '/var/lib/jenkins/kubeconfig'  // local kubeconfig
     }
 
     stages {
 
-        // 1️⃣ Git Checkout
         stage('Git Checkout') {
             steps {
                 git branch: 'main', url: 'https://github.com/LeithGharbi1/leith_gharbi_SIM1'
             }
         }
 
-        // 2️⃣ Build (Maven compile + package)
         stage('Build') {
             steps {
                 sh 'mvn clean package -DskipTests'
             }
         }
 
-        // 3️⃣ Docker Build & Push
         stage('Docker Build & Push') {
             steps {
                 sh "docker build -t ${DOCKERHUB_USER}/${IMAGE_NAME}:latest ."
@@ -46,30 +43,14 @@ pipeline {
             }
         }
 
-        // 4️⃣ Kubernetes Deploy (apply manifests)
         stage('Kubernetes Deploy') {
             steps {
                 sh """
-                    export KUBECONFIG=${KUBECONFIG_PATH}
-                    kubectl apply -f ${K8S_MANIFEST_DIR}/mysql-deployment.yaml -n ${K8S_NAMESPACE}
-                    kubectl apply -f ${K8S_MANIFEST_DIR}/spring-deployment.yaml -n ${K8S_NAMESPACE}
-                """
-            }
-        }
-
-        // 5️⃣ Deploy MySQL & Spring Boot on K8s (verify rollout)
-        stage('Deploy MySQL & Spring Boot on K8s') {
-            steps {
-                sh """
-                    export KUBECONFIG=${KUBECONFIG_PATH}
-                    echo 'Waiting for MySQL rollout...'
-                    kubectl -n ${K8S_NAMESPACE} rollout status deployment/${MYSQL_DEPLOYMENT_NAME} --timeout=180s
-                    echo 'Waiting for Spring Boot rollout...'
-                    kubectl -n ${K8S_NAMESPACE} rollout status deployment/${SPRING_DEPLOYMENT_NAME} --timeout=180s
-
-                    echo 'Checking Pods and Services'
-                    kubectl -n ${K8S_NAMESPACE} get pods -o wide
-                    kubectl -n ${K8S_NAMESPACE} get svc
+                    KUBECONFIG=${KUBECONFIG_PATH} kubectl apply -f ${K8S_MANIFEST_DIR}/ -n ${K8S_NAMESPACE}
+                    KUBECONFIG=${KUBECONFIG_PATH} kubectl rollout status deployment/${MYSQL_DEPLOYMENT_NAME} -n ${K8S_NAMESPACE} --timeout=180s
+                    KUBECONFIG=${KUBECONFIG_PATH} kubectl rollout status deployment/${SPRING_DEPLOYMENT_NAME} -n ${K8S_NAMESPACE} --timeout=180s
+                    KUBECONFIG=${KUBECONFIG_PATH} kubectl get pods -n ${K8S_NAMESPACE} -o wide
+                    KUBECONFIG=${KUBECONFIG_PATH} kubectl get svc -n ${K8S_NAMESPACE}
                 """
             }
         }
